@@ -44,7 +44,7 @@ inductive Proposition (Atom : Type u) : Type u where
   /-- The "of course" exponential. -/
   | bang (a : Proposition Atom)
   /-- The "why not" exponential.
-  This is written as ¿, or \?, to distinguish itself from the lean syntatical hole ? syntax -/
+  This is written as ʔ, or \_?, to distinguish itself from the lean syntatical hole ? syntax -/
   | quest (a : Proposition Atom)
 deriving DecidableEq, BEq
 
@@ -60,7 +60,7 @@ instance : Bot (Proposition Atom) := ⟨.bot⟩
 @[inherit_doc] scoped infix:30 " & " => Proposition.with
 
 @[inherit_doc] scoped prefix:95 "!" => Proposition.bang
-@[inherit_doc] scoped prefix:95 "¿" => Proposition.quest
+@[inherit_doc] scoped prefix:95 "ʔ" => Proposition.quest
 
 /-- Positive propositions. -/
 def Proposition.Pos : Proposition Atom → Prop
@@ -147,9 +147,9 @@ inductive Proof : Sequent Atom → Prop where
   | oplus₂ : Proof (b :: Γ) → Proof ((a ⊕ b) :: Γ)
   | with : Proof (a :: Γ) → Proof (b :: Γ) → Proof ((a & b) :: Γ)
   | top : Proof (top :: Γ)
-  | quest : Proof (a :: Γ) → Proof (¿a :: Γ)
-  | weaken : Proof Γ → Proof (¿a :: Γ)
-  | contract : Proof (¿a :: ¿a :: Γ) → Proof (¿a :: Γ)
+  | quest : Proof (a :: Γ) → Proof (ʔa :: Γ)
+  | weaken : Proof Γ → Proof (ʔa :: Γ)
+  | contract : Proof (ʔa :: ʔa :: Γ) → Proof (ʔa :: Γ)
   | bang {Γ : Sequent Atom} {a} : Γ.allQuest → Proof (a :: Γ) → Proof ((!a) :: Γ)
 
 scoped notation "⊢" Γ:90 => Proof Γ
@@ -194,7 +194,7 @@ theorem bang_top_eqv_one : (!⊤ : Proposition Atom) ≡ 1 := by
     · intro _ _; contradiction
     exact Proof.top
 
-theorem quest_zero_eqv_bot : (¿0 : Proposition Atom) ≡ ⊥ := by
+theorem quest_zero_eqv_bot : (ʔ0 : Proposition Atom) ≡ ⊥ := by
   constructor
   · apply Proof.exchange (List.Perm.swap (bang top) bot [])
     apply Proof.bot
