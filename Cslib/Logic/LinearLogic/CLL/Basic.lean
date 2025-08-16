@@ -6,6 +6,8 @@ Authors: Fabrizio Montesi
 
 import Aesop
 import Mathlib.Order.Notation
+import Mathlib.Data.Finset.Insert
+import Mathlib.Data.Finset.Lattice.Basic
 
 /-! # Classical Linear Logic
 
@@ -126,39 +128,39 @@ theorem Proposition.dual.involution (a : Proposition Atom) : a.dual.dual = a := 
 /-- Linear implication. -/
 def Proposition.linImpl (a b : Proposition Atom) : Proposition Atom := a.dual ⅋ b
 
-/-- A sequent in CLL is a list of propositions. -/
-abbrev Sequent (Atom) := List (Proposition Atom)
+/-- A sequent in CLL is usually defined as a list of propositions, though we define it as `Finset`
+here to embed the Exchange and Contract rules -/
+abbrev Sequent (Atom) := Finset (Proposition Atom)
 
 /-- Checks that all propositions in `Γ` are question marks. -/
 def Sequent.allQuest (Γ : Sequent Atom) :=
   ∀ a ∈ Γ, ∃ b, a = Proposition.quest b
 
-open Proposition in
+variable [D : DecidableEq Atom]
+
 /-- Sequent calculus for CLL. -/
 inductive Proof : Sequent Atom → Type u where
-  | ax : Proof [a, a.dual]
-  | cut : Proof (a :: Γ) → Proof (a.dual :: Δ) → Proof (Γ ++ Δ)
-  | exchange : List.Perm Γ Δ → Proof Γ → Proof Δ
-  | one : Proof [one]
-  | bot : Proof Γ → Proof (⊥ :: Γ)
-  | parr : Proof (a :: b :: Γ) → Proof ((a ⅋ b) :: Γ)
-  | tensor : Proof (a :: Γ) → Proof (b :: Δ) → Proof ((a ⊗ b) :: (Γ ++ Δ))
-  | oplus₁ : Proof (a :: Γ) → Proof ((a ⊕ b) :: Γ)
-  | oplus₂ : Proof (b :: Γ) → Proof ((a ⊕ b) :: Γ)
-  | with : Proof (a :: Γ) → Proof (b :: Γ) → Proof ((a & b) :: Γ)
-  | top : Proof (top :: Γ)
-  | quest : Proof (a :: Γ) → Proof (ʔa :: Γ)
-  | weaken : Proof Γ → Proof (ʔa :: Γ)
-  | contract : Proof (ʔa :: ʔa :: Γ) → Proof (ʔa :: Γ)
-  | bang {Γ : Sequent Atom} {a} : Γ.allQuest → Proof (a :: Γ) → Proof ((!a) :: Γ)
+  | ax {a : Proposition Atom} : Proof {a, a.dual}
+  | cut : Proof (insert a Γ) → Proof (insert a.dual Δ) → Proof (Γ ∪ Δ)
+  | one : Proof {one}
+  | bot : Proof Γ → Proof (insert ⊥ Γ)
+  | parr : Proof (insert a (insert b Γ)) → Proof (insert (a ⅋ b) Γ)
+  | tensor : Proof (insert a Γ) → Proof (insert b Δ) → Proof (insert (a ⊗ b) (Γ ∪ Δ))
+  | oplus₁ : Proof (insert a Γ) → Proof (insert (a ⊕ b) Γ)
+  | oplus₂ : Proof (insert b Γ) → Proof (insert (a ⊕ b) Γ)
+  | with : Proof (insert a Γ) → Proof (insert b Γ) → Proof (insert (a & b) Γ)
+  | top : Proof (insert top Γ)
+  | quest : Proof (insert a Γ) → Proof (insert (ʔa) Γ)
+  | weaken : Proof Γ → Proof (insert (ʔa) Γ)
+  | bang {Γ : Sequent Atom} {a} : Γ.allQuest → Proof (insert a Γ) → Proof (insert (!a) Γ)
 
 /-- A sequent is provable if it can be derived with a `Proof`. -/
 def Provable (Γ : Sequent Atom) : Prop := Nonempty (Proof Γ)
 
 /-- If there is a `Proof` concluding Γ, then Γ is `Provable`. -/
-theorem Provable.of_proof (p : Proof Γ) : Provable Γ := ⟨p⟩
+theorem Provable.of_proof (p : Proof Γ) : @Provable _ D Γ := ⟨p⟩
 /-- By classical logic, if `Γ` is `Provable`, then it must have an associated `Proof`. -/
-noncomputable def Provable.proof (p : Provable Γ) : Proof Γ := Classical.choice p
+noncomputable def Provable.proof (p : @Provable _ D Γ) : Proof Γ := Classical.choice p
 
 scoped notation "⊢" Γ:90 => Provable Γ
 
@@ -167,28 +169,32 @@ section LogicalEquiv
 /-! ## Logical equivalences -/
 
 /-- Two propositions are equivalent if one implies the other and vice versa. -/
-def Proposition.equiv (a b : Proposition Atom) : Prop := ⊢[a.dual, b] ∧ ⊢[b.dual, a]
+def Proposition.equiv (a b : Proposition Atom) : Prop := ⊢{a.dual, b} ∧ ⊢{b.dual, a}
 
 scoped infix:29 " ≡ " => Proposition.equiv
 
-def Proposition.equiv_of {a b : Proposition Atom} : Proof [a.dual, b] → Proof [b.dual, a] → a ≡ b :=
+def Proposition.equiv_of {a b : Proposition Atom} : Proof {a.dual, b} → Proof {b.dual, a} → a ≡ b :=
   (⟨.of_proof ·, .of_proof ·⟩)
+
+-- TODO: a weaker tactic that isn't `aesop` to prove finset equivalence at proof-time?
+def Proof.permute {Γ Δ : Sequent Atom} (hab : Γ = Δ := by aesop) (h : Proof Γ) : Proof Δ :=
+  (congrArg _ hab).mp h
+
+def Provable.permute {Γ Δ : Sequent Atom} (hab : Γ = Δ := by aesop) (h : Provable Γ) : Provable Δ :=
+  .of_proof (h.proof.permute hab)
 
 namespace Proposition
 
 @[refl]
-theorem refl (a : Proposition Atom) : a ≡ a := by
-  apply Proposition.equiv_of
-  all_goals
-    apply Proof.exchange (List.Perm.swap ..)
-    exact Proof.ax
+theorem refl (a : Proposition Atom) : a ≡ a :=
+  Proposition.equiv_of Proof.ax.permute Proof.ax.permute
 
 @[symm]
 theorem symm {a b : Proposition Atom} (h : a ≡ b) : b ≡ a := ⟨h.2, h.1⟩
 
 theorem trans {a b c : Proposition Atom} (hab : a ≡ b) (hbc : b ≡ c) : a ≡ c := Proposition.equiv_of
-  ((hab.1.proof.exchange (.swap ..)).cut hbc.1.proof)
-  ((hbc.2.proof.exchange (.swap ..)).cut hab.2.proof)
+  ((hab.1.permute (Δ := {b, _})).proof.cut hbc.1.proof)
+  ((hbc.2.permute (Δ := {b, _})).proof.cut hab.2.proof)
 
 /-- The canonical equivalence relation for propositions. -/
 def propositionSetoid : Setoid (Proposition Atom) :=
@@ -199,36 +205,30 @@ theorem bang_top_eqv_one : (!⊤ : Proposition Atom) ≡ 1 := by
   · apply Proof.weaken
     exact Proof.one
   · apply Proof.bot
-    apply Proof.bang
+    apply Proof.bang (Γ := ∅)
     · intro _ _; contradiction
     exact Proof.top
 
 theorem quest_zero_eqv_bot : (ʔ0 : Proposition Atom) ≡ ⊥ := by
   apply Proposition.equiv_of
-  · apply Proof.exchange (List.Perm.swap (bang top) bot [])
+  · apply Proof.permute (Γ := {⊥, (ʔ0).dual})
     apply Proof.bot
-    apply Proof.bang
+    apply Proof.bang (Γ := ∅)
     · intro _ _; contradiction
     exact Proof.top
-  · apply Proof.exchange (List.Perm.swap one (quest zero) [])
+  · apply Proof.permute (Γ := {ʔ0, (⊥ : Proposition _).dual})
     apply Proof.weaken
     exact Proof.one
 
-theorem tensor_zero_eqv_zero (a : Proposition Atom) : a ⊗ 0 ≡ 0 := by
-  refine Proposition.equiv_of ?_ .top
-  apply Proof.parr
-  apply Proof.exchange (List.Perm.swap a.dual ⊤ [0])
-  exact Proof.top
+theorem tensor_zero_eqv_zero (a : Proposition Atom) : a ⊗ 0 ≡ 0 :=
+  Proposition.equiv_of (.parr .top) .top
 
 theorem parr_top_eqv_top (a : Proposition Atom) :
     a ⅋ ⊤ ≡ ⊤ := by
-  apply Proposition.equiv_of
-  · apply Proof.exchange (List.Perm.swap (parr a top).dual top [])
-    exact Proof.top
-  · apply Proof.exchange (List.Perm.swap top.dual (parr a top) [])
-    apply Proof.parr
-    apply Proof.exchange (List.Perm.swap a top [top.dual])
-    exact Proof.top
+  apply Proposition.equiv_of .top
+  apply Proof.permute (Γ := {a ⅋ ⊤, .dual ⊤})
+  apply Proof.parr
+  exact Proof.top
 
 end Proposition
 
