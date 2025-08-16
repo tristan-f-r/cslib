@@ -135,7 +135,7 @@ def Sequent.allQuest (Γ : Sequent Atom) :=
 
 open Proposition in
 /-- Sequent calculus for CLL. -/
-inductive Proof : Sequent Atom → Prop where
+inductive Proof : Sequent Atom → Type u where
   | ax : Proof [a, a.dual]
   | cut : Proof (a :: Γ) → Proof (a.dual :: Δ) → Proof (Γ ++ Δ)
   | exchange : List.Perm Γ Δ → Proof Γ → Proof Δ
@@ -152,7 +152,15 @@ inductive Proof : Sequent Atom → Prop where
   | contract : Proof (ʔa :: ʔa :: Γ) → Proof (ʔa :: Γ)
   | bang {Γ : Sequent Atom} {a} : Γ.allQuest → Proof (a :: Γ) → Proof ((!a) :: Γ)
 
-scoped notation "⊢" Γ:90 => Proof Γ
+/-- A sequent is provable if it can be derived with a `Proof`. -/
+def Provable (Γ : Sequent Atom) : Prop := Nonempty (Proof Γ)
+
+/-- If there is a `Proof` concluding Γ, then Γ is `Provable`. -/
+theorem Provable.of_proof (p : Proof Γ) : Provable Γ := ⟨p⟩
+/-- By classical logic, if `Γ` is `Provable`, then it must have an associated `Proof`. -/
+noncomputable def Provable.proof (p : Provable Γ) : Proof Γ := Classical.choice p
+
+scoped notation "⊢" Γ:90 => Provable Γ
 
 section LogicalEquiv
 
@@ -163,11 +171,14 @@ def Proposition.equiv (a b : Proposition Atom) : Prop := ⊢[a.dual, b] ∧ ⊢[
 
 scoped infix:29 " ≡ " => Proposition.equiv
 
+def Proposition.equiv_of {a b : Proposition Atom} : Proof [a.dual, b] → Proof [b.dual, a] → a ≡ b :=
+  (⟨.of_proof ·, .of_proof ·⟩)
+
 namespace Proposition
 
 @[refl]
 theorem refl (a : Proposition Atom) : a ≡ a := by
-  constructor
+  apply Proposition.equiv_of
   all_goals
     apply Proof.exchange (List.Perm.swap ..)
     exact Proof.ax
@@ -175,18 +186,16 @@ theorem refl (a : Proposition Atom) : a ≡ a := by
 @[symm]
 theorem symm {a b : Proposition Atom} (h : a ≡ b) : b ≡ a := ⟨h.2, h.1⟩
 
-theorem trans {a b c : Proposition Atom} (hab : a ≡ b) (hbc : b ≡ c) : a ≡ c :=
-  ⟨
-    Proof.cut (Proof.exchange (List.Perm.swap ..) hab.1) hbc.1,
-    Proof.cut (Proof.exchange (List.Perm.swap ..) hbc.2) hab.2
-  ⟩
+theorem trans {a b c : Proposition Atom} (hab : a ≡ b) (hbc : b ≡ c) : a ≡ c := Proposition.equiv_of
+  ((hab.1.proof.exchange (.swap ..)).cut hbc.1.proof)
+  ((hbc.2.proof.exchange (.swap ..)).cut hab.2.proof)
 
 /-- The canonical equivalence relation for propositions. -/
 def propositionSetoid : Setoid (Proposition Atom) :=
   ⟨equiv, refl, symm, trans⟩
 
 theorem bang_top_eqv_one : (!⊤ : Proposition Atom) ≡ 1 := by
-  constructor
+  apply Proposition.equiv_of
   · apply Proof.weaken
     exact Proof.one
   · apply Proof.bot
@@ -195,7 +204,7 @@ theorem bang_top_eqv_one : (!⊤ : Proposition Atom) ≡ 1 := by
     exact Proof.top
 
 theorem quest_zero_eqv_bot : (ʔ0 : Proposition Atom) ≡ ⊥ := by
-  constructor
+  apply Proposition.equiv_of
   · apply Proof.exchange (List.Perm.swap (bang top) bot [])
     apply Proof.bot
     apply Proof.bang
@@ -206,14 +215,14 @@ theorem quest_zero_eqv_bot : (ʔ0 : Proposition Atom) ≡ ⊥ := by
     exact Proof.one
 
 theorem tensor_zero_eqv_zero (a : Proposition Atom) : a ⊗ 0 ≡ 0 := by
-  refine ⟨?_, .top⟩
+  refine Proposition.equiv_of ?_ .top
   apply Proof.parr
   apply Proof.exchange (List.Perm.swap a.dual ⊤ [0])
   exact Proof.top
 
 theorem parr_top_eqv_top (a : Proposition Atom) :
     a ⅋ ⊤ ≡ ⊤ := by
-  constructor
+  apply Proposition.equiv_of
   · apply Proof.exchange (List.Perm.swap (parr a top).dual top [])
     exact Proof.top
   · apply Proof.exchange (List.Perm.swap top.dual (parr a top) [])
